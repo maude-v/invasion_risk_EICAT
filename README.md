@@ -12,6 +12,6 @@ This repo contains source files for this article and relevant data.
 
 ## Code owners
 
-This code was developed with Stefano Cannessa ( @canessas )  
+This code was developed with Stefano Cannessa (@canessas)  
 
 Amanda Trask, John G. Ewen and Caitlin Andrews also contributed to statistical analyses.
