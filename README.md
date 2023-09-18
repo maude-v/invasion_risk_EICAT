@@ -13,7 +13,7 @@ This repo contains source files for this article and relevant data.
 
 This code was developed with Stefano Cannessa (@canessas)  
 
-Amanda Trask, John G. Ewen and Caitlin Andrews also contributed to statistical analyses.
+Amanda Trask, Caitlin Andrews and John G. Ewen also contributed to statistical analyses.
 #
 ![image of the Sihek drawn on a wall on Guam](https://bloximages.newyork1.vip.townnews.com/postguam.com/content/tncms/assets/v3/editorial/c/2b/c2bc974e-8350-11ed-8af0-ef6ec3933b4c/63a696a056fa2.image.jpg?resize=1280%2C854)
 © Charles Williams, Jonah Benavente/The Guam Daily Post
