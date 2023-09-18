@@ -2,7 +2,7 @@
 
 This code was developed in the course of my Master's in Conservation Biology at the University of Bern.   
 
-It was applied to the case of the conservation introduction of the Sihek and resulted in the article titled "Assessing invasion risks using EICAT-based expert elicitation: application to a conservation translocation".  
+It was applied to the case of the conservation introduction of the sihek and resulted in the article titled "Assessing invasion risks using EICAT-based expert elicitation: application to a conservation translocation".  
 
 This repo contains source files for this article and relevant data.
 
