@@ -1,0 +1,417 @@
+---
+title: "Aggregation of expert estimates with consideration of uncertainty"
+authors: "Maude Vernet, Stefano Canessa"
+date: "2023-05-01"
+output: html_document
+---
+
+This is the code for the methods presented in the paper:
+
+Uncertainty in impact assessments of invasive species: application to a conservation introduction (2023)
+
+Maude Vernet, Stefano Canessa, 
+
+# Bootstrapping method
+
+The first method we propose to aggregate expert estimates while taking the inherent uncertainty surrounding probabilities, as well as knowledge uncertainty (in our case, uncertainty of expert estimates) is a Dirichlet-multinomial bootstrapping analysis. This method relies on the idea that each expert will be given a certain number of votes that depends on their uncertainty. The more certain an expert is, the more weight their estimates will have on the overall aggregation. 
+
+This method relies on the determination of the number of votes given to each expert (i.e. the number of times their estimates will be present in the matrix) for each site and each impact mechanism. This number of votes is directly proportional to the uncertainty of each expert (in our case, we used a unit rate of 1) and corresponds to the number of Dirichlet random vectors to generate when creating the Dirichlet distribution of the expert estimates. When using the Dirichlet distribution, the higher the number of Dirichlet random vectors are created, the closer the mean of the distribution will be to the original probabilities used to create said Dirichlet distribution. This means that the variance around the estimates given by expert that are more certain will be smaller than by experts that are more uncertain. Thus, the inherent uncertainty around probabilities is higher for less certain experts.
+
+Through this method, one can obtain a dataset holding all expert estimates, which accounts for the inherent uncertainty related to probabilities and for the knowledge uncertainty of the experts. After calculating the Dirichlet distribution of all experts for one site and one impact mechanism, the results are plotted using violin plots. This allows for the visualization of the variance of the data as well as the mean and the first and third quantiles. Since this method renders the whole distribution of the expert estimates, it allows for the good visualization of the disagreement between the experts.
+
+# Bayesian method
+
+In this method, we perform a Bayesian inference based on expert opinions. This method is similar to the bootstrapping method and also relies on giving a specific number of votes to each expert, depending on the uncertainty of their estimates. However, the main difference relies in the fact that instead of obtaining the whole distribution (as is the case in the bootstrapping method), we obtain here the average and the posterior for the mean of the group. This method renders a good visualization of the consensus derived from the estimates given by the group of experts.
+
+In this method, the estimates of each expert for each site and each impact mechanism are extracted and multiplied by a coefficient proportional to the uncertainty of these estimates (in our case, as for the bootstrapping we used a unit rate of 1). For each expert, each site, and each impact mechanism, a list containing the numbers from one to the number of levels of impact considered in the analysis is then created. The number of times each number is represented in the list is proportional to the estimate of the corresponding level and to the uncertainty of the expert. The resulting lists are then collided by sites (for one impact mechanism) and fed into a Bayesian hierarchical model using a Markov Chain Monte Carlo (MCMC) simulation. This model allows for the obtention of the categorical distribution of the Dirichlet distribution of these lists. This process is repeated for 10000 iterations, with 5000 burn-ins, three chains and a thinning rate of one.
+
+# Base aggregation for comparision
+
+The goal of this step is to create plots similar to the ones created previously, but with no consideration of uncertainty. This allows for the comparision between an aggregation with and without consideration of knowledge uncertainty
+
+# Appearance of the dataset
+
+The code presented here functions by looping over the impact mechanisms & levels as well as the sites considered in the risk assessment analysis. To use this code and these functions, one should thus create a dataset according to the following guidelines:
+
+One should create an Excel file (ref?) with as many sheets as there are impact mechanisms considered in the analysis. The names of these sheets should be the ones of said impact mechanisms and the data shall be entered in each sheets using the same pattern as the one explained here. The first column, titled “Expert” should contain the ID of each expert (name / initials / number), with each ID repeated as many times as there are impact levels considered plus one time. The second column should be titled “Level” and should contain a repetition of the name of each level, one after the other with the final level being each time “Uncertainty”. The framework of the EICAT recommends using five levels of impact (“Minimal”, “Minor”, “Moderate”, “Major” and “massive”).
+
+Finally, the following columns should be titled with the names of the sites considered for the impact mechanism that one is working on. The expert estimates as well as their respective uncertainty should then be entered in the corresponding lines. The estimates should be entered as percentages (i.e. they should sum up to 100) and the level of uncertainty should be given with a number ranging from 1 (very uncertain) to 100 (very certain). The ID of the experts, the number of levels, and the sites can differ between sheets. 
+
+## Specifying data
+
+Here, you will need to specifiy the data that you are using.
+
+```{r aggregation settings}
+library(extraDistr);library(readxl);library(tidyverse);library(jagsUI)
+
+#loops
+data <- "EICAT Summary - edited.xlsx"
+#the dataset you use
+sheets.dataset <- c("Competition","Predation","Hybridisation","Disease") 
+#names of the sheets of the dataset
+max.number.levels <- 5
+#maximum number of levels of impact you are using 
+level.names <- c("Minimal","Minor","Moderate","Major","Massive")
+#(EICAT recommends 5 levels: Minor, Minimal, Moderate, Major, Massive)
+max.confidence <- 100
+#maximum confidence = the most certain experts can possibly be (usually = 100)
+max.number.sites <- 6
+#maximum number of sites that you are using for 1 impact mechanism
+site.names <- factor(c("Chuuk","Guam","Kosrae","Palmyra","Tinian","Yap"))
+# site names
+max.number.experts <- 8
+#maximum number of experts among all impact mechanisms
+votes <- 100
+# How many votes per expert in the basic and Bayesian aggregation
+
+#graphs
+colour.graph <- c("steelblue4","darkcyan","chocolate1","chocolate3","orangered4")
+#colours for the plots (1 colour/level of impact)
+use.rows <- FALSE
+#set to FALSE if you want the graphs plotted on 1 column
+number.rows.plot <- round(length(sheets.dataset)/2,0)
+#specify the number of rows to plot the graphs on (needs use.rows to be TRUE)
+
+```
+
+## Writing the jags model
+
+A jags model is a loop that is going to make an action (the prior (p)) with a certain number of iterations . In this case, we want the model to:
+- derive the Dirichlet distribution of a specific vector called alpha using a uniform distribution
+- For each site, this has to be done for each uncertainty level and for each expert.
+
+When the jags model will be ran, we set specific settings for the MCMC:
+- Number of iterations = 1000
+- Number of descarded iterations (burn-ins) = 5000
+- Number of chains (number of times to run the iterations) = 3 
+- Parameters to save : "p"
+- Initialization nodes = 
+- list of estimates that all have the same value and sum up to 1
+- Number of nodes = #levels of impacts
+- -> Probability of each node = 1/#levels of impact
+
+## Smart rounding the expert estimates
+
+In a later stage in this code, we will multiply the estimates of each experts by their respective uncertainty for each site. The estimates of each expert for each site and each impact level sum up to 1 and they will still have to sum up to 1 after the multiplication to be implemented in the jags model.
+Thus, we create a smart rounding function (smart.round()) that will allow for these estimates to be rounded, while still summing up to 1.
+
+```{r base functions}
+
+# JAGS model
+cat("
+model{
+  for(t in 1:n.experts){ 
+    for(i in 1:confidence[t]){ #likelihood
+      y[t,i] ~ dcat(p[])
+    } #i
+  } #t
+  p[1:n.levels] ~ ddirch(alpha[]) #prior
+} #model
+",file="bayesian_method.bug")
+
+# Smart round function to avoid missing or extra votes
+smart.round <- function(x, digits = 0) {
+  up <- 10 ^ digits
+  x <- x * up
+  y <- floor(x)
+  indices <- tail(order(x-y), round(sum(x)) - sum(y))
+  y[indices] <- y[indices] + 1
+  y / up
+}
+
+```
+
+```{r aggregation loop}
+
+# Create empty arrays for storage
+# This array is for summary statistics (means)
+mean.p <- array(0,
+                dim = c(max.number.sites,
+                        max.number.levels,
+                        length(sheets.dataset),
+                        3),
+                dimnames = list(site.names,
+                                level.names,
+                                sheets.dataset,
+                                c("Basic", "Bootstrapping", "Bayesian")
+                                )
+                )
+# This list is for the whole simulation runs (not a data.frame because dimensions may vary)
+all.sims <- list()
+
+# Run loop of aggregation over impact mechanisms and sites
+for(w in 1:length(sheets.dataset)){ # Impact
+  
+  # Extract data
+  this.impact <- read_excel(data,
+                            sheet = sheets.dataset[w], #the loop will run for each sheet
+                            na = "NA")
+  name.experts <- unique(this.impact$Expert) # Extract names of experts for this impact mechanism
+  number.experts <- length(unique(this.impact$Expert)) # Extract total number of experts
+  number.levels <- length(unique(this.impact$Level))-1 # Last level is "Confidence" 
+  number.sites <- ncol(this.impact)-2 #two first columns are "Expert" and "Level"
+  
+  # Create array to store simulations for this impact
+  impact.sims <- array(NA,dim=c(number.experts*votes,number.levels,3, number.sites),
+                       dimnames=list(1:(number.experts*votes),paste0("Level",1:number.levels),c("Basic","Bootstrapping","Bayesian"),
+                                     colnames(this.impact)[-c(1:2)]))
+  
+  # Put the names of the sites in alphabetical order
+  
+  for(k in 1:number.sites){ # Site
+    
+    this.site <- colnames(this.impact)[k+2]
+    #each time take one site (the first site comes up in column 3 of the dataset)
+    confidence <- as.numeric(unlist(this.impact %>% 
+                                       filter(Level=="Confidence")%>% 
+                                       select(all_of(this.site))))
+    #get the confidence of each expert for each site
+    number.votes.experts <- rep(name.experts,confidence*votes)
+    #determine the number of votes of each expert (= their confidence)
+    probabilities.raw <- this.impact %>%
+      filter(Level!="Confidence") %>% 
+      select(all_of(this.site))
+    #get the expert estimates (raw) in each EICAT impact mechanism (column)
+    
+    probabilities.matrix <- matrix(as.numeric(unlist(probabilities.raw)), 
+                                   nrow=number.experts,
+                                   ncol=number.levels,byrow=T) # Convert percentages to probabilities
+    # Check that the rows all sum up to 1! -> if not, break the loop
+    # if(sum(probabilities.matrix) != nrow(probabilities.matrix)){
+    #   stop("ERROR: probabilities do not sum to 1 for all experts", call. = FALSE)}
+    
+    ### APPROACH 1: BASIC AGGREGATION - NO CONFIDENCE - One Dirichlet for each expert, no confidence (N votes each)
+    # Sample the Dirichlet using the expressed probabilities
+    draws.app1 <- data.frame(matrix(0,number.experts*votes,number.levels),
+                             Expert=rep(1:number.experts,each=votes))
+    colnames(draws.app1)[1:5] <- paste0("Level",1:number.levels)
+    for(ee in 1:number.experts){
+      which.pos <- which(probabilities.matrix[ee,]>0) # Which probabilities are strictly positive?
+      # If there is only one positive probability, make it 100%
+      if(length(which.pos)==1){draws.app1[draws.app1$Expert==ee,which.pos] <- 1}
+      #if there are only two positive, replace with the expert estimates (Dirichlet does not work with only 2)
+      else{
+        # If there are >=2 probabilities, draw from the Dirichlet only for them
+        draws.app1[draws.app1$Expert==ee,which.pos] <-
+          rdirichlet(votes,alpha=probabilities.matrix[ee,which.pos])}
+    } # ee
+    # Summarize probabilities (mean and standard deviation) - Round to 5 decimals to ensure sum=1
+    mean.p[k,,w,1] <- round(as.numeric(colMeans(draws.app1[,1:number.levels])),5)
+    # Use these draws to fill the corresponding part of the this.impact data.frame
+    impact.sims[,,1,k] <- matrix(unlist(draws.app1[,-(number.levels+1)]),
+                                 nrow=number.experts*votes,
+                                 ncol=number.levels)
+
+    
+    ### APPROACH 2: BOOTSTRAPPING METHOD - CONFIDENCE BY WEIGHTING - Same Dirichlet for each expert, repeated *confidence* times
+    # Determine weight of each expert proportional to their expressed confidence
+    votes.confidence <- smart.round(number.experts*votes*confidence/sum(confidence),0)
+    # Sample the Dirichlet using the expressed probabilities
+    draws.app2 <- data.frame(matrix(0,number.experts*votes,number.levels),
+                             Expert=rep(1:number.experts,votes.confidence))
+    for(ee in 1:number.experts){
+      which.pos <- which(probabilities.matrix[ee,]>0) # Which probabilities are strictly positive?
+      # If there is only one positive probability, make it 100%
+      if(length(which.pos)==1){draws.app2[draws.app2$Expert==ee,which.pos] <- 1}
+      #if there are only two positive, replace with the expert estimates (Dirichlet does not work with only 2)
+      else{
+        # If there are >=2 probabilities, draw from the Dirichlet only for them
+        draws.app2[draws.app2$Expert==ee,which.pos] <-
+          rdirichlet(votes.confidence[ee],alpha=probabilities.matrix[ee,which.pos])}
+    } # ee
+    # Summarize probabilities (mean and standard deviation) - Round to 5 decimals to ensure sum=1
+    mean.p[k,,w,2] <- round(as.numeric(colMeans(draws.app2[,1:number.levels])),5)
+    # Use these draws to fill the corresponding part of the this.impact data.frame
+    impact.sims[,,2,k] <- matrix(unlist(draws.app2[,-(number.levels+1)]),nrow=number.experts*votes,ncol=number.levels)
+    
+    # APPROACH 3: BAYESIAN METHOD - Bayesian posterior estimation from categorical draws
+    votes.matrix.jags <- matrix(NA,nrow=number.experts,ncol=max.confidence)
+    # Give each expert categorical votes equal to their confidence
+    z <- list() 
+    for(ee in 1:number.experts){
+      z[[ee]] <- rep(1:number.levels,smart.round(confidence[ee]*probabilities.matrix[ee,]*0.01))
+      votes.matrix.jags[ee,1:(confidence[ee])] <- z[[ee]] # JAGS needs a list: fill NAs where confidence <100
+    } # ee
+    # Bundle data
+    datalst <- list(y=votes.matrix.jags, 
+                    n.experts=number.experts, 
+                    n.levels=number.levels, 
+                    confidence=confidence,
+                    alpha=rep(1/number.levels,number.levels))
+    # Initial values
+    inits <- function(){list(p=rep(1/number.levels,number.levels))}
+    # MCMC settings for Bayesian approach
+    nb=2000;nc=3;ni=votes*number.experts+nb+10;nt=nc # MCMC settings to match draws from Dirichlet for basic and bootstrap (+10 buffer to avoid issues)
+    # Run JAGS model
+    cat.jags <- jagsUI(data=datalst,
+                       inits=inits,parameters.to.save=c("p"),
+                       model.file="bayesian_method.bug",
+                       n.chains=nc, n.iter=ni, n.burnin=nb, n.thin=nt,
+                       parallel=TRUE, verbose=FALSE)
+    mean.p[k,,w,3] <- round(cat.jags$mean$p,5) # Store mean probabilities - Round to 5 decimals to ensure sum=1
+    # Use these draws to fill the corresponding part of the this.impact data.frame
+    impact.sims[,,3,k] <- cat.jags$sims.list$p[1:(votes*number.experts),]
+  } # k
+  
+  # Combine all sims into a list for this impact mechanism
+  all.sims[[w]] <- impact.sims
+  
+} # w
+
+```
+
+# Plots & tables
+
+We want to create one plot per impact mechanism, comparing sites and aggregation methods.
+
+```{r plot}
+library(ggplot2);library(gridExtra);library(ggh4x)
+
+# Convert mean.p array to data.frame
+mean.p.df <- as.data.frame.table(mean.p) %>% 
+  rename(c(Site=Var1,Level=Var2,Impact=Var3,Method=Var4,Probability=Freq)) %>% # Rename columns
+  select(Impact,Site,Level,Method,Probability) %>% # Shuffle columns in the preferred order
+  arrange(Impact,Site,Level) # Sort columns
+
+# Empty list to store plots
+plot.base <- list()
+
+# Make a plot for each impact
+for(w in 1:length(sheets.dataset)){
+  # Convert all.sims for this impact to a data.frame
+  all.sims.df <- as.data.frame.table(all.sims[[w]]) %>% 
+    rename(c(Sim=Var1,Level=Var2,Method=Var3,Site=Var4,Probability=Freq)) %>% # Rename columns
+    select(Site,Level,Method,Sim,Probability) %>% # Shuffle columns in the preferred order
+    arrange(Sim,Site,Level,Method) # Sort columns
+  # all.sims.df$Site <- factor(all.sims.df$Site,
+  #                            levels=sort(unique(all.sims.df$Site)))
+    
+  plot.base[[w]] <- ggplot(all.sims.df) +
+    geom_violin(aes(x= Level, y = Probability, fill = Level),
+                color = "black", alpha = 0.8,scale = "width",linewidth = 0.2,
+                draw_quantiles = c(0.25,0.75), key_glyph = "dotplot") +
+    scale_fill_manual(values = colour.graph, labels=level.names) +
+    #create violin plots
+    stat_summary(aes(x= Level, y = Probability), 
+                 fun = mean,geom = "point",color="black",size = 0.8) +
+    # Add mean
+    # facet_nested(Method~Site,nest_line = element_line(linetype = 2)) +
+    facet_nested(Method~Site)+
+    scale_y_continuous(limits = c(0, 1)) +
+    ggtitle(sheets.dataset[w]) +
+    ylab("Probability") +
+    # theme_bw() + 
+    theme(strip.background = element_rect(fill = "white", colour = "black", linewidth = 0.1),
+          strip.background.y = element_rect(fill = "white", colour = "white"),
+      strip.text = element_text(color="black",size=19, family = "Times"),
+      panel.grid = element_line(color = "lightgrey", linewidth = 0.05),
+      panel.background = element_rect(fill = "white", colour = "black", linewidth = 0.05),
+      panel.spacing.x = unit(3, "pt"),
+      panel.spacing.y=unit(16, "pt"),
+      axis.title.x = element_blank(),
+      axis.title.y = element_text(size=19,vjust=2.5, family = "Times"),
+      axis.ticks = element_blank(),
+      axis.text.x = element_blank(),
+      axis.text.y = element_text(size = 12, family = "Times"),
+      legend.position = "bottom",
+      legend.key.size = unit(1.5,"line"),
+      legend.justification = "center",
+      legend.key = element_blank(),
+      legend.title=element_blank(),
+      legend.text = element_text(size=19, family = "Times"),
+      plot.title = element_text(size = 20, hjust = 0.5, face = "bold", family = "Times", vjust = 2))
+
+} #w
+```
+
+```{r save plots}
+for(w in 1:length(sheets.dataset)){
+  #create the plot
+  ggsave(plot.base[[w]], filename = paste0(sheets.dataset[w],".png"),  bg = "white",
+       width = 10, height = 12, dpi = 600, units = "in", device='png')
+}
+```
+
+We want to create one table per aggregation method, summarizing the results for each impact emchanism and site
+
+```{r table}
+# Extract mean and quantiles from each element of list all.sims - output still a list
+all.means <- lapply(all.sims,function(x)apply(x,c(4,2,3),mean))
+all.q25 <- lapply(all.sims,function(x)apply(x,c(4,2,3),quantile,0.25))
+all.q75 <- lapply(all.sims,function(x)apply(x,c(4,2,3),quantile,0.75))
+
+all.tables <- list() # list to store results per mechanism
+table.method <- list() # list to store results per method
+
+for(m in c("Basic", "Bootstrapping", "Bayesian")){
+for(w in 1:length(sheets.dataset)){
+  number.levels <- dim(all.means[[w]])[2]
+  
+  site.names <- unlist(dimnames(all.means[[w]])[1])
+  means <- as.data.frame(round(all.means[[w]][,,m],2))
+  mean.method <- as.data.frame(cbind(Site = rep(site.names, number.levels),
+                                    Mean = stack(means))) 
+  colnames(mean.method) <- c("Site", "Mean", "Level") #rename columns
+  #create table (mean) for 1 impact mechanism
+  mean.method <- as.data.frame(mean.method) %>%
+    select(Site,Level,Mean) %>% # classify by site
+    arrange(Site,Level,Mean) # reorder columns
+  
+  
+  q25 <- as.data.frame(round(all.q25[[w]][,,m],2))
+  q25.method <- as.data.frame(cbind(Site = rep(site.names, number.levels),
+                                    q25 = stack(q25))) 
+   colnames(q25.method) <- c("Site", "q25", "Level") #rename columns
+  #create table (q25) for 1 impact mechanism
+  q25.method <- as.data.frame(q25.method) %>%
+    select(Site,Level,q25) %>% # classify by site
+    arrange(Site,Level,q25) # reorder columns
+  
+  q75 <- as.data.frame(round(all.q75[[w]][,,m],2))
+  q75.method <- as.data.frame(cbind(Site = rep(site.names, number.levels),
+                                    q75 = stack(q75)))
+  colnames(q75.method) <- c("Site", "q75", "Level") #rename columns
+  #create table (q75) for 1 impact mechanism
+  q75.method <- as.data.frame(q75.method) %>%
+    select(Site,Level,q75) %>% # classify by site
+    arrange(Site,Level,q75) # reorder columns
+  
+  table.method[[w]] <- cbind(q25.method, mean.method[3], q75.method[3]) 
+  #merge all mechanisms for 1 method in one list
+ 
+} #w
+  all.tables[[m]] <- table.method
+  #merge all methods together
+} #m
+```
+
+
+
+
+
+```{r check.results}
+
+# Use this code to double check specific results
+
+# Define impact and site to check
+check <- c("Competition", "Kosrae")
+# Impacts: Competition, Predation, Hybridisation, Disease
+# Sites: Kosrae, Chuuk, Yap, Palmyra, Tinian, Guam (not all applicable for all impacts)
+
+# Subset data to check
+check.data <- read_excel(data,
+                         sheet = check[1], #the loop will run for each sheet
+                         na = "NA")
+number.experts <- length(unique(check.data$Expert)) # Extract total number of experts
+number.levels <- length(unique(check.data$Level))-1 # Last level is "Confidence"
+#determine the number of votes of each expert (= their confidence)
+probabilities.raw <- check.data %>% filter(Level!="Confidence") %>%  select(all_of(check[2]))
+#get the expert estimates (raw) in each EICAT impact mechanism (column)
+probabilities.matrix <- matrix(as.numeric(unlist(probabilities.raw)), 
+                               nrow=number.experts,
+                               ncol=number.levels,byrow=T) * 0.01 # Convert percentages to probabilities
+# Bind raw means from elicitation and estimates from the three approaches
+rbind(Raw=colMeans(probabilities.matrix),
+      t(mean.p[which(colnames(check.data)==check[2])-2,,check[1],]))
+
+```
