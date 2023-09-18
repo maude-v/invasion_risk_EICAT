@@ -1,6 +1,6 @@
 # Master's thesis
 
-In the course of my Master's in Conservation Biology, I developed the code for the article titled "Assessing invasion risks using EICAT-based expert elicitation: application to a conservation translocation".  
+This code was developed in the course of my Master's in Conservation Biology for the article titled "Assessing invasion risks using EICAT-based expert elicitation: application to a conservation translocation".  
 
 This repo contains source files for this article and relevant data.
 
