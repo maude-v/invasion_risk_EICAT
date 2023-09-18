@@ -8,7 +8,6 @@ This repo contains source files for this article and relevant data.
 
 - `Rmd/`: R Markdown files to reproduce tables, figures and analysis.
 - `Data/`: Cleaned data used for thesis document.
-- `Bib/`: Bibliography files.
 
 ## Code owners
 
