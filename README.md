@@ -6,5 +6,5 @@ This repo contains source files for this article and relevent data.
 ## Directories
 
 Rmd/: R Markdown files to reproduce tables, figures and analysis.
-data/: Cleaned data used for thesis document.
-bib/: Bibliography files.
+Data/: Cleaned data used for thesis document.
+Bib/: Bibliography files.
