@@ -1,0 +1,3 @@
+Rmd/: R Markdown files to reproduce tables, figures and analysis.
+data/: Cleaned data used for thesis document.
+bib/: Bibliography files.
