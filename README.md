@@ -1,8 +1,13 @@
-# Master's thesis
+# Assessing invasion risks using EICAT-based expert elicitation: application to a conservation translocation
 
 This code was developed in the course of my Master's in Conservation Biology at the University of Bern.   
+It aims to help aggregate estimates obtained through EICAT-based expert elicitation to assess invasion risks .  
+It was applied to the case of the conservation introduction of the sihek.  
 
-It was applied to the case of the conservation introduction of the sihek and resulted in the article titled "Assessing invasion risks using EICAT-based expert elicitation: application to a conservation translocation".  
+Detailed aims, example of use and resulting conclusions are described in the following manuscript:  
+**Assessing invasion risks using EICAT-based expert elicitation: application to a conservation translocation,   
+Maude Vernet, Amanda Trask, Caitlyn Andrews, John G. Ewen, Stefano Canessa**
+
 
 This repo contains source files for this article and relevant data.
 
@@ -13,7 +18,7 @@ This repo contains source files for this article and relevant data.
 
 ## Code owners
 
-This code was developed with Stefano Cannessa (@canessas)  
+This code was developed with Stefano Canessa (@canessas)  
 
 Amanda Trask, Caitlin Andrews and John G. Ewen also contributed to statistical analyses.
 #
