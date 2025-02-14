@@ -161,10 +161,9 @@ for(w in 1:length(sheets.dataset)){ # Impact
                              Expert=rep(1:number.experts,each=votes))
     colnames(draws.app1)[1:5] <- paste0("Level",1:number.levels)
     for(ee in 1:number.experts){
-      which.pos <- which(probabilities.matrix[ee,]>0) # Which probabilities are strictly positive?
-      # If there is only one positive probability, make it 100%
+      which.pos <- which(probabilities.matrix[ee,]>0) # Which probabilities are strictly positive (aka non-zero)?
+      # If there is only one positive probability, make it 100% (dirichlet deos not work with only 1 value)
       if(length(which.pos)==1){draws.app1[draws.app1$Expert==ee,which.pos] <- 1}
-      #if there are only two positive, replace with the expert estimates (Dirichlet does not work with only 2)
       else{
         # If there are >=2 probabilities, draw from the Dirichlet only for them
         draws.app1[draws.app1$Expert==ee,which.pos] <-
@@ -185,10 +184,9 @@ for(w in 1:length(sheets.dataset)){ # Impact
     draws.app2 <- data.frame(matrix(0,number.experts*votes,number.levels),
                              Expert=rep(1:number.experts,votes.confidence))
     for(ee in 1:number.experts){
-      which.pos <- which(probabilities.matrix[ee,]>0) # Which probabilities are strictly positive?
-      # If there is only one positive probability, make it 100%
+      which.pos <- which(probabilities.matrix[ee,]>0) # Which probabilities are strictly positive (aka non-zero)?
+      # If there is only one positive probability, make it 100% (dirichlet deos not work with only 1 value)
       if(length(which.pos)==1){draws.app2[draws.app2$Expert==ee,which.pos] <- 1}
-      #if there are only two positive, replace with the expert estimates (Dirichlet does not work with only 2)
       else{
         # If there are >=2 probabilities, draw from the Dirichlet only for them
         draws.app2[draws.app2$Expert==ee,which.pos] <-
